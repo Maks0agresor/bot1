@@ -1,0 +1,4 @@
+pip install aiogram
+pip install python-dotenv
+pip install motor
+pip install pymongo
