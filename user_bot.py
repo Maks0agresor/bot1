@@ -23,6 +23,9 @@ load_dotenv()
 TOKEN = os.getenv("USER_BOT_TOKEN")  # Токен бота для пользователей
 MONGO_URI = os.getenv("MONGO_URI")
 
+# Идентификатор вашего канала
+CHANNEL_ID = '@exchange_CMM'  # Замените на @username вашего канала
+
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -60,6 +63,18 @@ async def rate_limit(user_id: int, limit_time: int = 120) -> bool:
 class DeleteTokenState(StatesGroup):
     waiting_for_token = State()
 
+# Функция для проверки подписки пользователя
+async def is_user_subscribed(user_id: int) -> bool:
+    try:
+        member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
+        if member.status in ['creator', 'administrator', 'member']:
+            return True
+        else:
+            return False
+    except Exception as e:
+        logger.error(f"Ошибка при проверке подписки пользователя: {e}")
+        return False
+
 # Хэндлер команды /start
 @router.message(F.text == "/start")
 async def start(message: types.Message):
@@ -71,12 +86,20 @@ async def start(message: types.Message):
     # Создаем клавиатуру для пользователей
     markup = ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="Ключи"), KeyboardButton(text="Стереть ключ")]
+            [KeyboardButton(text="Ключи"), KeyboardButton(text="Стереть ключ")],
+            [KeyboardButton(text="Наш канал")]
         ],
         resize_keyboard=True,
     )
 
     await message.answer("Я ваш помощник в обмене файлами.", reply_markup=markup)
+
+# Хэндлер для кнопки "Наш канал"
+@router.message(F.text == "Наш канал")
+async def send_channel_info(message: types.Message):
+    await message.answer(
+        "Подписывайтесь на наш канал, чтобы быть в курсе новостей: @your_channel_username"
+    )
 
 # Хэндлер для команды 'Ключи'
 @router.message(F.text == "Ключи")
@@ -85,7 +108,7 @@ async def list_user_tokens(message: types.Message):
 
     # Проверка на лимит запросов
     if not await rate_limit(user_id):
-        await message.answer("Подождите немного перед следующим запросом (60сек.)")
+        await message.answer("Подождите немного перед следующим запросом (60 сек.)")
         return
 
     tokens_cursor = files_collection.find(
@@ -132,6 +155,13 @@ async def process_user_token_deletion(message: types.Message, state: FSMContext)
 async def handle_file(message: types.Message):
     user_id = message.from_user.id
 
+    # Проверка подписки
+    is_subscribed = await is_user_subscribed(user_id)
+    if not is_subscribed:
+        await message.answer(
+            "Чтобы быть в курсе новостей и получать обновления, подпишитесь на наш канал: @your_channel_username"
+        )
+
     # Получаем информацию о файле через метод get_file
     file_info = await bot.get_file(message.document.file_id)
     file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
@@ -142,10 +172,9 @@ async def handle_file(message: types.Message):
         {
             "token": token,
             "file_id": message.document.file_id,
-            "file_url": file_url,  # Сохраняем URL файла
+            "file_url": file_url,
             "user_id": user_id,
             "uploaded_at": datetime.utcnow(),
-            # "expiry_date": expiry_date,  # Убрали это поле
             "file_type": "document",
             "users": [],
         }
@@ -161,6 +190,13 @@ async def handle_file(message: types.Message):
 async def handle_photo(message: types.Message):
     user_id = message.from_user.id
 
+    # Проверка подписки
+    is_subscribed = await is_user_subscribed(user_id)
+    if not is_subscribed:
+        await message.answer(
+            "Чтобы быть в курсе новостей и получать обновления, подпишитесь на наш канал: @your_channel_username"
+        )
+
     # Берем самое большое фото
     file_id = message.photo[-1].file_id
 
@@ -174,10 +210,9 @@ async def handle_photo(message: types.Message):
         {
             "token": token,
             "file_id": file_id,
-            "file_url": file_url,  # Сохраняем URL фото
+            "file_url": file_url,
             "user_id": user_id,
             "uploaded_at": datetime.utcnow(),
-            # "expiry_date": expiry_date,  # Убрали это поле
             "file_type": "photo",
             "users": [],
         }
@@ -193,6 +228,13 @@ async def handle_photo(message: types.Message):
 async def handle_video(message: types.Message):
     user_id = message.from_user.id
 
+    # Проверка подписки
+    is_subscribed = await is_user_subscribed(user_id)
+    if not is_subscribed:
+        await message.answer(
+            "Чтобы быть в курсе новостей и получать обновления, подпишитесь на наш канал: @your_channel_username"
+        )
+
     file_id = message.video.file_id
 
     # Получаем информацию о видео через метод get_file
@@ -205,10 +247,9 @@ async def handle_video(message: types.Message):
         {
             "token": token,
             "file_id": file_id,
-            "file_url": file_url,  # Сохраняем URL видео
+            "file_url": file_url,
             "user_id": user_id,
             "uploaded_at": datetime.utcnow(),
-            # "expiry_date": expiry_date,  # Убрали это поле
             "file_type": "video",
             "users": [],
         }
@@ -229,7 +270,12 @@ async def handle_text_message(message: types.Message):
 
     file_doc = await files_collection.find_one({"token": token})
     if file_doc:
-        # Убрали проверку срока действия токена
+        # Проверка подписки
+        is_subscribed = await is_user_subscribed(user_id)
+        if not is_subscribed:
+            await message.answer(
+                "Чтобы быть в курсе новостей и получать обновления, подпишитесь на наш канал: @your_channel_username"
+            )
 
         if user_id not in file_doc.get("users", []):
             await files_collection.update_one(
@@ -245,7 +291,6 @@ async def handle_text_message(message: types.Message):
                 await bot.send_document(message.chat.id, file_doc["file_id"])
         except Exception as e:
             logger.error(f"Ошибка при отправке файла через file_id: {e}")
-            # Если file_id больше недоступен, отправляем файл через URL
             await message.answer("file_id больше недоступен, отправляю файл по ссылке.")
             await bot.send_message(message.chat.id, file_doc["file_url"])
     else:
