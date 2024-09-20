@@ -31,8 +31,6 @@ files_collection = db["files"]
 # Создание бота и диспетчера
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
-
-# Роутер для регистрации хэндлеров
 router = Router()
 
 # Список ID администраторов
