@@ -22,9 +22,7 @@ load_dotenv()
 
 TOKEN = os.getenv("USER_BOT_TOKEN")  # Токен бота для пользователей
 MONGO_URI = os.getenv("MONGO_URI")
-
-# Идентификатор вашего канала
-CHANNEL_ID = '@exchange_CMM'  # Замените на @username вашего канала
+CHANNEL_ID = os.getenv("CHANNEL_ID")  # Идентификатор вашего канала
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -72,7 +70,7 @@ async def is_user_subscribed(user_id: int) -> bool:
         else:
             return False
     except Exception as e:
-        logger.error(f"Ошибка при проверке подписки пользователя: {e}")
+        logger.error(f"Ошибка при проверке подписки пользователя {user_id}: {e}")
         return False
 
 # Хэндлер команды /start
@@ -87,18 +85,24 @@ async def start(message: types.Message):
     markup = ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="Ключи"), KeyboardButton(text="Стереть ключ")],
-            [KeyboardButton(text="Наш канал")]
+            [KeyboardButton(text="Мой ТГК")]
         ],
         resize_keyboard=True,
     )
 
-    await message.answer("Я ваш помощник в обмене файлами.", reply_markup=markup)
+    # Отправляем приветственное сообщение с предупреждением
+    welcome_message = (
+        "Я ваш помощник в обмене файлами.\n\n"
+        "⚠️ *Внимание!* За распространение или скачивание файлов ответственность несут только пользователи."
+    )
 
-# Хэндлер для кнопки "Наш канал"
-@router.message(F.text == "Наш канал")
+    await message.answer(welcome_message, reply_markup=markup, parse_mode="Markdown")
+
+# Хэндлер для кнопки "Мой ТГК"
+@router.message(F.text == "Мой ТГК")
 async def send_channel_info(message: types.Message):
     await message.answer(
-        "Подписывайтесь на наш канал, чтобы быть в курсе новостей: @your_channel_username"
+        f"Подписывайтесь на наш канал, чтобы быть в курсе новостей: {CHANNEL_ID}"
     )
 
 # Хэндлер для команды 'Ключи'
@@ -159,7 +163,7 @@ async def handle_file(message: types.Message):
     is_subscribed = await is_user_subscribed(user_id)
     if not is_subscribed:
         await message.answer(
-            "Чтобы быть в курсе новостей и получать обновления, подпишитесь на наш канал: @your_channel_username"
+            f"Чтобы быть в курсе новостей и получать обновления, подпишитесь на наш канал: {CHANNEL_ID}"
         )
 
     # Получаем информацию о файле через метод get_file
@@ -194,7 +198,7 @@ async def handle_photo(message: types.Message):
     is_subscribed = await is_user_subscribed(user_id)
     if not is_subscribed:
         await message.answer(
-            "Чтобы быть в курсе новостей и получать обновления, подпишитесь на наш канал: @your_channel_username"
+            f"Чтобы быть в курсе новостей и получать обновления, подпишитесь на наш канал: {CHANNEL_ID}"
         )
 
     # Берем самое большое фото
@@ -232,7 +236,7 @@ async def handle_video(message: types.Message):
     is_subscribed = await is_user_subscribed(user_id)
     if not is_subscribed:
         await message.answer(
-            "Чтобы быть в курсе новостей и получать обновления, подпишитесь на наш канал: @your_channel_username"
+            f"Чтобы быть в курсе новостей и получать обновления, подпишитесь на наш канал: {CHANNEL_ID}"
         )
 
     file_id = message.video.file_id
@@ -274,7 +278,7 @@ async def handle_text_message(message: types.Message):
         is_subscribed = await is_user_subscribed(user_id)
         if not is_subscribed:
             await message.answer(
-                "Чтобы быть в курсе новостей и получать обновления, подпишитесь на наш канал: @your_channel_username"
+                f"Чтобы быть в курсе новостей и получать обновления, подпишитесь на наш канал: {CHANNEL_ID}"
             )
 
         if user_id not in file_doc.get("users", []):
